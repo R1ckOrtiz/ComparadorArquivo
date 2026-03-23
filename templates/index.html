@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Inspetor de Documentos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <main class="page">
+        <section class="hero">
+            <div class="hero-copy">
+                <p class="eyebrow">Comparador de documentos</p>
+                <h1>Compare arquivos com leitura mais precisa do que foi alterado.</h1>
+                <p class="lead">
+                    A aplicação aceita qualquer extensão. Para formatos suportados, ela mostra
+                    localização, contexto, valor anterior, valor novo e diff detalhado.
+                </p>
+            </div>
+            <div class="hero-panel">
+                <strong>Foco atual</strong>
+                <p>Planilhas grandes, estruturas JSON/XML e documentos textuais com análise em português do Brasil.</p>
+            </div>
+        </section>
+
+        <section class="panel">
+            <form method="post" enctype="multipart/form-data" class="upload-form">
+                <label class="upload-field">
+                    <span>Versão A</span>
+                    <input type="file" name="file_a" required>
+                </label>
+                <label class="upload-field">
+                    <span>Versão B</span>
+                    <input type="file" name="file_b" required>
+                </label>
+                <button type="submit">Comparar arquivos</button>
+            </form>
+
+            <div class="support-grid">
+                <article>
+                    <h2>Comparação detalhada</h2>
+                    <p>TXT, JSON, CSV, XML, SVG, PDF, DOCX, XLSX e arquivos legíveis em texto.</p>
+                </article>
+                <article>
+                    <h2>Comparação estrutural</h2>
+                    <p>Arquivos ZIP e formatos baseados em ZIP não suportados diretamente.</p>
+                </article>
+                <article>
+                    <h2>Comparação binária</h2>
+                    <p>Hash, tamanho, faixas divergentes e trecho hexadecimal quando não houver parser dedicado.</p>
+                </article>
+            </div>
+        </section>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <section class="flash {{ category }}">{{ message }}</section>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% if comparison %}
+            <section class="results">
+                <section class="result-shell">
+                    <section class="panel result-overview">
+                        <div class="result-copy">
+                            <p class="eyebrow">Resultado</p>
+                            <h2>{{ comparison.mode_label }}</h2>
+                            <p>{{ comparison.strategy_label }}</p>
+                            <div class="overview-copy">
+                                <strong>{{ comparison.overview.title }}</strong>
+                                <p>{{ comparison.overview.body }}</p>
+                            </div>
+                        </div>
+                        <div class="result-status">
+                            <span class="status {{ 'ok' if comparison.identical else 'changed' }}">
+                                {{ 'Sem diferenças' if comparison.identical else 'Diferenças encontradas' }}
+                            </span>
+                        </div>
+                    </section>
+
+                    <aside class="panel focus-panel">
+                        <div class="section-head compact-head">
+                            <h3>Onde olhar primeiro</h3>
+                            <p>Os pontos mais relevantes da comparação.</p>
+                        </div>
+                        {% if comparison.focus_points %}
+                            <div class="focus-list">
+                                {% for point in comparison.focus_points %}
+                                    <article class="focus-item">
+                                        <strong>{{ point.title }}</strong>
+                                        <p>{{ point.detail }}</p>
+                                    </article>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p>Nenhum ponto crítico foi identificado.</p>
+                        {% endif %}
+                    </aside>
+                </section>
+
+                <section class="highlight-grid">
+                    {% for item in comparison.highlight_items %}
+                        <article class="highlight-card">
+                            <span>{{ item.label }}</span>
+                            <strong>{{ item.value if item.value is not none else '-' }}</strong>
+                        </article>
+                    {% endfor %}
+                </section>
+
+                <section class="comparison-board">
+                    <article class="panel file-card">
+                        <div class="card-head">
+                            <h3>{{ comparison.left.filename }}</h3>
+                            <span class="file-badge">Arquivo A</span>
+                        </div>
+                        <p>{{ comparison.left.format_label }}</p>
+                        <ul>
+                            <li>Extensão: {{ comparison.left.metadata.extension }}</li>
+                            <li>Tamanho: {{ comparison.left.metadata.size_human }}</li>
+                            <li>MIME: {{ comparison.left.metadata.mime_type }}</li>
+                            {% if comparison.left.content_items is not none %}
+                                <li>Itens extraídos: {{ comparison.left.content_items }}</li>
+                            {% endif %}
+                            {% if comparison.left.sheet_names_preview %}
+                                <li>Planilhas: {{ comparison.left.sheet_names_preview }}</li>
+                            {% endif %}
+                            <li>SHA-256: <code>{{ comparison.left.metadata.sha256[:16] }}...</code></li>
+                        </ul>
+                    </article>
+
+                    <article class="panel file-card">
+                        <div class="card-head">
+                            <h3>{{ comparison.right.filename }}</h3>
+                            <span class="file-badge">Arquivo B</span>
+                        </div>
+                        <p>{{ comparison.right.format_label }}</p>
+                        <ul>
+                            <li>Extensão: {{ comparison.right.metadata.extension }}</li>
+                            <li>Tamanho: {{ comparison.right.metadata.size_human }}</li>
+                            <li>MIME: {{ comparison.right.metadata.mime_type }}</li>
+                            {% if comparison.right.content_items is not none %}
+                                <li>Itens extraídos: {{ comparison.right.content_items }}</li>
+                            {% endif %}
+                            {% if comparison.right.sheet_names_preview %}
+                                <li>Planilhas: {{ comparison.right.sheet_names_preview }}</li>
+                            {% endif %}
+                            <li>SHA-256: <code>{{ comparison.right.metadata.sha256[:16] }}...</code></li>
+                        </ul>
+                    </article>
+                </section>
+
+                <section class="panel summary-panel">
+                    <div class="section-head">
+                        <h3>Resumo completo</h3>
+                        <p>Métricas da comparação para ajudar na leitura do resultado.</p>
+                    </div>
+                    <div class="summary-grid">
+                        {% for item in comparison.summary_items %}
+                            <article>
+                                <span>{{ item.label }}</span>
+                                <strong>{{ item.value if item.value is not none else '-' }}</strong>
+                            </article>
+                        {% endfor %}
+                    </div>
+                </section>
+
+                {% if comparison.warnings %}
+                    <section class="panel warning-panel">
+                        <div class="section-head">
+                            <h3>Observações</h3>
+                            <p>Notas técnicas geradas durante a leitura e comparação.</p>
+                        </div>
+                        <ul>
+                            {% for warning in comparison.warnings %}
+                                <li>{{ warning }}</li>
+                            {% endfor %}
+                        </ul>
+                    </section>
+                {% endif %}
+
+                <section class="panel change-panel">
+                    <div class="section-head">
+                        <h3>Detalhamento das alterações</h3>
+                        <p>Cada cartão mostra o ponto exato afetado e o contexto disponível.</p>
+                    </div>
+
+                    {% if comparison.changes %}
+                        <div class="change-list">
+                            {% for change in comparison.changes %}
+                                <article class="change-item type-{{ change.type|lower }}">
+                                    <div class="change-header">
+                                        <div>
+                                            <p class="change-index">Alteração {{ loop.index }}</p>
+                                            <h4>{{ change.focus_label if change.focus_label is defined else change.path }}</h4>
+                                        </div>
+                                        <span class="change-type">{{ change.type }}</span>
+                                    </div>
+
+                                    <div class="meta-pills">
+                                        {% if change.path is defined %}
+                                            <span>{{ change.path }}</span>
+                                        {% endif %}
+                                        {% if change.location_label is defined %}
+                                            <span>{{ change.location_label }}</span>
+                                        {% endif %}
+                                        {% if change.focus_label is defined %}
+                                            <span>Foco: {{ change.focus_label }}</span>
+                                        {% endif %}
+                                        {% if change.column_name is defined and change.column_name %}
+                                            <span>Coluna: {{ change.column_name }}</span>
+                                        {% endif %}
+                                        {% if change.row_reference is defined and change.row_reference %}
+                                            <span>Registro: {{ change.row_reference }}</span>
+                                        {% endif %}
+                                        {% if change.before_range is defined %}
+                                            <span>Arquivo A: {{ change.before_range }}</span>
+                                            <span>Arquivo B: {{ change.after_range }}</span>
+                                        {% endif %}
+                                        {% if change.similarity is defined %}
+                                            <span>Similaridade: {{ change.similarity }}</span>
+                                        {% endif %}
+                                    </div>
+
+                                    {% if change.details is defined %}
+                                        <p class="change-detail">{{ change.details }}</p>
+                                    {% endif %}
+
+                                    {% if change.before_excerpt is defined %}
+                                        <div class="excerpt-grid">
+                                            <div class="compare-block">
+                                                <span class="block-label">Trecho anterior</span>
+                                                <pre>{{ change.before_excerpt | join('\n') }}</pre>
+                                            </div>
+                                            <div class="compare-block">
+                                                <span class="block-label">Trecho novo</span>
+                                                <pre>{{ change.after_excerpt | join('\n') }}</pre>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+
+                                    {% if change.before_value is defined or change.after_value is defined %}
+                                        <div class="excerpt-grid">
+                                            <div class="compare-block">
+                                                <span class="block-label">Valor anterior</span>
+                                                {% if change.before_profile is defined and change.before_profile %}
+                                                    <span class="mini-note">{{ change.before_profile }}</span>
+                                                {% endif %}
+                                                <pre>{{ change.before_value if change.before_value is not none else '[sem valor]' }}</pre>
+                                            </div>
+                                            <div class="compare-block">
+                                                <span class="block-label">Valor novo</span>
+                                                {% if change.after_profile is defined and change.after_profile %}
+                                                    <span class="mini-note">{{ change.after_profile }}</span>
+                                                {% endif %}
+                                                <pre>{{ change.after_value if change.after_value is not none else '[sem valor]' }}</pre>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+
+                                    {% if change.row_context_before is defined or change.row_context_after is defined %}
+                                        <div class="excerpt-grid row-context-grid">
+                                            <div class="compare-block">
+                                                <span class="block-label">Contexto da linha no arquivo A</span>
+                                                <pre>{{ change.row_context_before if change.row_context_before is not none else '[sem contexto]' }}</pre>
+                                            </div>
+                                            <div class="compare-block">
+                                                <span class="block-label">Contexto da linha no arquivo B</span>
+                                                <pre>{{ change.row_context_after if change.row_context_after is not none else '[sem contexto]' }}</pre>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+
+                                    {% if change.inline_diff is defined and change.inline_diff %}
+                                        <div class="compare-block">
+                                            <span class="block-label">Diff detalhado</span>
+                                            <pre class="inline-diff">{{ change.inline_diff }}</pre>
+                                        </div>
+                                    {% endif %}
+                                </article>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p>Nenhuma alteração registrada.</p>
+                    {% endif %}
+                </section>
+
+                {% if comparison.unified_diff %}
+                    <section class="panel diff-panel">
+                        <div class="section-head">
+                            <h3>Diff unificado</h3>
+                            <p>Visão consolidada do diff em formato textual.</p>
+                        </div>
+                        <pre>{{ comparison.unified_diff }}</pre>
+                    </section>
+                {% endif %}
+            </section>
+        {% endif %}
+    </main>
+</body>
+</html>
