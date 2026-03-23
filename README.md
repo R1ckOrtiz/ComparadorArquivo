@@ -1,4 +1,4 @@
-# Inspector de Documentos
+# Inspetor de Documentos
 
 Aplicação em Flask para comparar duas versões de arquivos.
 
